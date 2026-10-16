@@ -5,3 +5,4 @@ pydantic
 httpx
 pytest
 networkx
+psycopg[binary]>=3.2,<4

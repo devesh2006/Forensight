@@ -10,14 +10,25 @@ from .ingest import make_session, ingest_dir, Evidence, Entity
 from .synth import generate, INCIDENT
 import hashlib, json, os
 
-DATA = Path(__file__).resolve().parents[2] / "data" / "nightfall"
+DATA = Path(os.getenv("NIGHTFALL_DATA_DIR", str(Path(__file__).resolve().parents[2] / "data" / "nightfall")))
 CASE = "NIGHTFALL"
 app = FastAPI(title="ForenSight AI API")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["GET", "POST"], allow_headers=["*"])
+origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000,http://127.0.0.1:8000").split(",") if o.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or None,
+                   allow_methods=["GET", "POST"], allow_headers=["*"])
 _db = None
 def db():
     global _db
-    if _db is None: _db = make_session(os.getenv("DATABASE_URL", "sqlite:///forensight.db"))
+    if _db is None:
+        url = os.getenv("DATABASE_URL")
+        if not url and os.getenv("DEPLOYMENT_ENV") == "render":
+            raise RuntimeError("DATABASE_URL must point to a persistent PostgreSQL database on the hosted backend.")
+        url = url or "sqlite:///forensight.db"
+        if url.startswith("postgres://"):
+            url = "postgresql+psycopg://" + url[len("postgres://"):]
+        elif url.startswith("postgresql://"):
+            url = "postgresql+psycopg://" + url[len("postgresql://"):]
+        _db = make_session(url)
     session = sessionmaker(bind=_db.get_bind())()
     try:
         yield session
@@ -121,7 +132,8 @@ class AskIn(BaseModel):
 def ask(body: AskIn, s=Depends(db)): return copilot.ask(s, CASE, body.query)
 
 WEB = Path(__file__).resolve().parents[2] / "frontend"
-app.mount("/assets", StaticFiles(directory=WEB), name="assets")
+if WEB.is_dir():
+    app.mount("/assets", StaticFiles(directory=WEB), name="assets")
 
-@app.get("/")
-def home(): return FileResponse(WEB / "index.html")
+    @app.get("/")
+    def home(): return FileResponse(WEB / "index.html")

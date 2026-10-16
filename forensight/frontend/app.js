@@ -2,8 +2,9 @@ const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAl
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const palette = ['#62c5ad','#a990e6','#e2ad61','#70b0e7','#df8585','#69c2d0','#d28cc1','#a9be71','#d68f5d','#81a6ad'];
 const parseTime = t => new Date(/[zZ]|[+-]\d\d:\d\d$/.test(t) ? t : `${t}+05:30`);
+const API_BASE = window.FORENSIGHT_API_BASE_URL || '';
 let stats=null, allEvents=[], graphData=null, offset=0, totalEvidence=0, activeQuery='', requestNo=0;
-async function api(path,opts){const r=await fetch(path,opts);if(!r.ok){let m=`Request failed (${r.status})`;try{m=(await r.json()).detail||m}catch{}throw Error(m)}return r.json()}
+async function api(path,opts){const r=await fetch(`${API_BASE}${path}`,opts);if(!r.ok){let m=`Request failed (${r.status})`;try{m=(await r.json()).detail||m}catch{}throw Error(m)}return r.json()}
 function notice(msg,error=false){const n=$('#notice');n.textContent=msg;n.classList.toggle('error',error);n.classList.remove('hidden');clearTimeout(notice.timer);notice.timer=setTimeout(()=>n.classList.add('hidden'),6500)}
 function go(page){$$('.page').forEach(x=>x.classList.toggle('active',x.id===page));$$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.page===page));history.replaceState(null,'',`#${page}`);if(page==='evidence')loadEvidence();if(page==='timeline')loadTimeline();if(page==='graph')loadGraph();if(page==='map')loadMap();window.scrollTo(0,0)}
 $$('.nav-item').forEach(b=>b.onclick=()=>go(b.dataset.page));$$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));

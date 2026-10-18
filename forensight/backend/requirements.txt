@@ -6,3 +6,6 @@ httpx
 pytest
 networkx
 psycopg[binary]>=3.2,<4
+pypdf>=5,<7
+tzdata>=2025.1
+defusedxml>=0.7.1

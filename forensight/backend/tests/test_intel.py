@@ -1,5 +1,5 @@
-import os, tempfile
-os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/t.db"
+import os
+os.environ["DATABASE_URL"] = "sqlite:///forensight-test.db"
 from fastapi.testclient import TestClient
 from app.main import app
 c = TestClient(app); c.post("/api/demo/load")

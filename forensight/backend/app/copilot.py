@@ -19,12 +19,12 @@ def _t(h, m, ap):
     if ap == "am" and h == 12: h = 0
     return h, m
 
-def extract(s, case, q):
+def extract(s, case, q, incident=INCIDENT):
     ql = q.lower(); ents = s.query(Entity).filter_by(case_id=case).all(); people = []
     for e in ents:
         if e.name != "Unknown" and (e.name.lower() in ql or e.name.split()[0].lower() in re.findall(r"[a-z]+", ql)): people.append(e.name)
     phones = re.findall(r"\+?\d{10,13}", q)
-    date = INCIDENT.date(); assumed_date = True
+    date = incident.date(); assumed_date = True
     m = re.search(r"(\d{1,2})(?:st|nd|rd|th)?\s+(" + "|".join(MONTHS) + ")", ql)
     if m: date = datetime(2026, MONTHS[m.group(2)], int(m.group(1))).date(); assumed_date = False
     win = None; mt = re.search(r"(?:between|from)\s+" + TIME + r"\s+(?:and|to)\s+" + TIME, ql)
@@ -45,7 +45,8 @@ def classify(q, ents):
     return "search"
 
 def row(e, nm):
-    return {"id": e.evidence_id, "type": e.type, "time": e.ts.isoformat(), "actor": nm.get(e.actor, e.actor), "target": nm.get(e.target, e.target),
+    return {"id": e.evidence_id, "type": e.type, "time": intel.case_time(e) if e.ts else None,"original_timestamp":e.original_timestamp,
+            "normalized_timestamp":intel.case_time(e) if e.ts else None,"timezone":e.timezone,"actor": nm.get(e.actor, e.actor), "target": nm.get(e.target, e.target),
             "summary": e.summary, "source": f"{e.source_file}:{e.source_artifact}", "lat": e.lat, "lon": e.lon}
 
 def place_of(lat, lon):
@@ -61,8 +62,11 @@ def fmt(e):
     if t == "app": return f'{e["actor"]}: {e["target"]} {e["summary"]}'
     return e["summary"]
 
-def ask(s, case, q):
-    q = q.strip()[:500]; ents = extract(s, case, q); intent = classify(q, ents); nm = intel.names(s, case); assumptions = []
+def ask(s, case, q, incident=INCIDENT, reference_location=None):
+    reference_location=reference_location or LOCS["Old Fort Parking"]
+    q = q.strip()[:500]; ents = extract(s, case, q,incident); intent = classify(q, ents); nm = intel.names(s, case); assumptions = []
+    if intent=="timeline" and not ents["window"] and re.search(r"around\s+(?:the\s+)?incident|incident\s+window|near\s+(?:the\s+)?incident",q,re.I):
+        ents["window"]=[(incident-timedelta(minutes=30)).isoformat(),(incident+timedelta(minutes=30)).isoformat()]
     if ents["date_assumed"] and (ents["window"] or intent in ("communication", "timeline")): assumptions.append(f"No date given; assumed incident date {ents['date']}.")
     base = s.query(Evidence).filter_by(case_id=case)
     evid, answer, reasoning, conf = [], "", "", 0.0
@@ -92,11 +96,11 @@ def ask(s, case, q):
             answer = f"{len(pairs)} communication event(s) match." + (" Counterparts: " + ", ".join(f"{k} ({v})" for k, v in cps.most_common(6)) + "." if cps else "")
             reasoning = f"Matched message/call evidence involving {', '.join(who or ents['phones'])}" + (" within the stated window." if ents["window"] else ".")
     elif intent == "location":
-        who = ents["people"]; es = base.filter_by(type="location").order_by(Evidence.ts).all()
+        who = ents["people"]; es = base.filter_by(type="location").filter(Evidence.ts.isnot(None),Evidence.lat.isnot(None),Evidence.lon.isnot(None)).order_by(Evidence.ts).all()
         if not who: answer, reasoning = "Which person's location? Please name them.", "No person identified."
         else:
-            es = [e for e in es if nm.get(e.actor, e.actor) in who and e.ts <= INCIDENT + timedelta(minutes=2 if "before" not in q.lower() else -0)]
-            if "before" in q.lower(): es = [e for e in es if e.ts < INCIDENT]
+            es = [e for e in es if e.ts is not None and nm.get(e.actor, e.actor) in who and e.ts <= incident + timedelta(minutes=2 if "before" not in q.lower() else 0)]
+            if "before" in q.lower(): es = [e for e in es if e.ts < incident]
             last = [row(e, nm) for e in es][-6:]; evid = last; conf = 0.85 if last else 0.0
             seq = [place_of(e["lat"], e["lon"]) or "unlabelled" for e in last]
             answer = f"Last {len(last)} recorded fixes for {who[0]}: " + " → ".join(f"{p} ({e['time'][11:16]})" for p, e in zip(seq, last)) + "." if last else f"No location fixes found for {who[0]}."
@@ -114,7 +118,7 @@ def ask(s, case, q):
             reasoning = "Ranked all communication graph edges by message and call count; cited matching source artifacts."
         else:
             allt = intel.strongest(s, case, who[0]); win = Counter(); ids = []
-            for e in base.filter(Evidence.type.in_(["message", "call"]), Evidence.ts >= INCIDENT - timedelta(hours=6), Evidence.ts <= INCIDENT + timedelta(hours=1)):
+            for e in base.filter(Evidence.type.in_(["message", "call"]), Evidence.ts >= incident - timedelta(hours=6), Evidence.ts <= incident + timedelta(hours=1)):
                 a, b = nm.get(e.actor, e.actor), nm.get(e.target, e.target)
                 if who[0] in (a, b): win[b if a == who[0] else a] += 1; ids.append(row(e, nm))
             evid = ids[:30]; conf = 0.8 if allt else 0.0
@@ -122,14 +126,14 @@ def ask(s, case, q):
             reasoning = "Counted calls and messages in the graph, then recounted inside the incident window because overall volume includes background chatter."
     elif intent == "correlation":
         cls = intel.correlations(s, case); who = set(ents["people"]); pl = GAZETTEER.get(ents["place"]) if ents["place"] else None
-        sel = [c for c in cls if (not who or who & set(c["people"])) and (not pl or intel.hav(*c["center"], *pl) < 600)]
+        sel = [c for c in cls if (not who or who & set(c["people"])) and (not pl or (c["center"] and intel.hav(*c["center"], *pl) < 600))]
         ids = {i for c in sel for i in c["evidence_ids"]}; evid = [row(e, nm) for e in base.filter(Evidence.evidence_id.in_(ids)).order_by(Evidence.ts)][:40] if ids else []
         conf = max((c["confidence"] for c in sel), default=0.0); ents["clusters"] = sel[:3]
         answer = (f"{len(sel)} correlated cluster(s). Best: {sel[0]['explanation']} Time {sel[0]['start'][11:16]}–{sel[0]['end'][11:16]}, people: {', '.join(sel[0]['people'])}." if sel else "No correlated evidence cluster links those entities.")
         reasoning = "Clusters anchor on GPS fixes and attach same-person calls/messages within 5 min and 400 m; filtered by the person and place you named."
     elif intent == "anomaly":
         an = intel.anomalies(s, case)
-        if "before" in q.lower(): an = [a for a in an if a["time"] < INCIDENT.isoformat()]
+        if "before" in q.lower(): an = [a for a in an if a["time"] < incident.isoformat()]
         an = [a for a in an if a["kind"] != "late_night_activity"]; an = sorted(an, key=lambda a: a["time"])[:6] or an[:6]; ids = {i for a in an for i in a.get("evidence_ids", [])}
         evid = [row(e, nm) for e in base.filter(Evidence.evidence_id.in_(ids)).order_by(Evidence.ts)][:30] if ids else []; conf = 0.7 if an else 0.0
         answer = f"{len(an)} anomaly signal(s): " + "; ".join(f"{a['kind'].replace('_', ' ')}: {a['detail']}" for a in an[:5]) + ". These are statistical flags, not findings of wrongdoing."
@@ -138,7 +142,7 @@ def ask(s, case, q):
         answer, reasoning = "No image or video evidence has been ingested yet; the computer-vision module (Phase 4) is not built.", "Checked evidence types: no media artifacts exist."
     elif intent == "summary":
         st = Counter(e.type for e in base); cl = intel.correlations(s, case)[:2]; dels = [e for e in base.filter_by(type="app") if "delete" in e.summary or "clear" in e.summary]
-        rel = intel.relevance(s, case, INCIDENT, LOCS["Old Fort Parking"]); ids = [r["evidence_id"] for r in rel[:6]] + [e.evidence_id for e in dels]
+        rel = intel.relevance(s, case, incident, reference_location); ids = [r["evidence_id"] for r in rel[:6]] + [e.evidence_id for e in dels]
         evid = [row(e, nm) for e in base.filter(Evidence.evidence_id.in_(ids)).order_by(Evidence.ts)]; conf = 0.75
         answer = f"{sum(st.values())} artifacts ({', '.join(f'{n} {t}' for t, n in st.items())}). " + " ".join(f"At {c['start'][11:16]}: {', '.join(c['people'])} correlated ({', '.join(c['types'])})." for c in cl) + f" {len(dels)} chat deletion/clear indicator(s) shortly after the incident window."
         reasoning = "Combined evidence counts, top correlation clusters, and deletion indicators; evidence list is the highest-relevance items near the incident."
@@ -164,6 +168,7 @@ def ask(s, case, q):
 
 def polish(out):
     """Optional: rephrase the grounded answer with an LLM. Never adds facts; falls back to the original text."""
+    if os.getenv("FORENSIGHT_MODE","offline").casefold()!="online":return out["answer"]
     key = os.getenv("ANTHROPIC_API_KEY")
     if not key or not out["evidence"]: return out["answer"]
     try:

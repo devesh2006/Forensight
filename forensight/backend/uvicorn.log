@@ -1,0 +1,42 @@
+INFO:     127.0.0.1:63430 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63430 - "GET /assets/style.css?v=20261019-analysis HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63430 - "GET /assets/app.js?v=20261019-analysis HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63430 - "GET /assets/system-status.js?v=20261019-ingest HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63430 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63430 - "GET /api/cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59104 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63430 - "GET /api/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58122 - "GET /api/evidence?offset=0&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50727 - "GET /api/correlations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64484 - "GET /api/relevance HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57277 - "GET /api/anomalies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50060 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51599 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51599 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52502 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52570 - "GET /api/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52570 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63310 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63310 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63300 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59796 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59999 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59999 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59999 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59999 - "GET /assets/app.js?v=20261019-evidence HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59999 - "GET /assets/system-status.js?v=20261019-ingest HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:59999 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59999 - "GET /api/cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59029 - "GET /api/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59999 - "GET /api/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61211 - "GET /api/correlations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53923 - "GET /api/relevance HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63862 - "GET /api/anomalies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62450 - "GET /api/evidence?offset=0&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62450 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51409 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63540 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63540 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63540 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63540 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59551 - "GET /api/health HTTP/1.1" 200 OK

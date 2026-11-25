@@ -1,0 +1,11 @@
+{
+  "name": "forensight-evidence-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4"
+  }
+}

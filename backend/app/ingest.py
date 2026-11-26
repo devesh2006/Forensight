@@ -1,5 +1,5 @@
 """Ingestion: parse CSV/JSON/XML -> normalized evidence rows with SHA-256 + provenance."""
-import csv, hashlib, io, json, re, zipfile
+import csv, hashlib, io, json, logging, re, zipfile
 import os
 from html.parser import HTMLParser
 from collections import Counter
@@ -9,6 +9,7 @@ from .timezones import case_zone
 from .parsers.geo import geojson_records, xml_geo_records
 from .parsers.registry import ParserRegistry, ParserSpec
 from xml.etree import ElementTree as ET  # stdlib parser; no external entities resolved
+logger = logging.getLogger("forensight.ingest")
 try:
     from defusedxml import ElementTree as SafeET
     from defusedxml.common import DefusedXmlException
@@ -59,6 +60,17 @@ class ImportJob(Base):
     filename=Column(String);status=Column(String,index=True);current_stage=Column(String);files_processed=Column(Integer,default=0);files_total=Column(Integer,default=0)
     records_processed=Column(Integer,default=0);records_total=Column(Integer,default=0);errors_json=Column(Text,default="[]");manifest_json=Column(Text)
     created_at=Column(DateTime);updated_at=Column(DateTime);raw_bytes=Column(LargeBinary)
+
+class EvidenceEmbedding(Base):
+    __tablename__ = "evidence_embeddings"
+    id = Column(Integer, primary_key=True)
+    case_id = Column(String, ForeignKey("cases.case_id"), index=True)
+    evidence_id = Column(String, ForeignKey("evidence.evidence_id", ondelete="CASCADE"), index=True, unique=True)
+    text_fingerprint = Column(String, nullable=False, index=True)
+    embedding = Column(LargeBinary, nullable=False)
+    updated_at = Column(DateTime)
+
+Index("ix_evidence_embeddings_case_eid", EvidenceEmbedding.case_id, EvidenceEmbedding.evidence_id)
 
 def make_session(url="sqlite:///forensight.db"):
     eng = create_engine(url, connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
@@ -828,5 +840,10 @@ def ingest_dataset(db, filename: str, raw: bytes, requested_case_id: str | None 
                       metadata_json=json.dumps({"file_count":len(files),"records_detected":detected,"records_imported":imported,
                                                 "records_failed":manifest["records_failed"],"file_hashes":manifest["file_hashes"]},ensure_ascii=False)))
     db.commit()
+    try:
+        from . import embeddings
+        embeddings.sync_case_embeddings(db, candidate)
+    except Exception as exc:
+        logger.warning("Post-ingest embedding sync failed for %s: %s", candidate, exc)
     if progress:progress("complete",files_completed,files_total,imported,imported)
     return manifest

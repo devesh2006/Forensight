@@ -1,16 +1,20 @@
 """Deterministic case queries. Every returned example points to an imported artifact."""
 from datetime import date, datetime, time, timedelta
 import json
+import logging
 import os
 from pathlib import Path
 import re
 
+logger = logging.getLogger("forensight.copilot")
+
 try:
-    from dotenv import load_dotenv
-    for _p in [Path(__file__).resolve().parents[2] / ".env", Path(__file__).resolve().parents[1] / ".env"]:
-        if _p.exists():
-            load_dotenv(_p)
-    load_dotenv()
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        from dotenv import load_dotenv
+        for _p in [Path(__file__).resolve().parents[2] / ".env", Path(__file__).resolve().parents[1] / ".env"]:
+            if _p.exists():
+                load_dotenv(_p)
+        load_dotenv()
 except Exception:
     pass
 
@@ -322,13 +326,68 @@ def ask(session, case, query, incident=None, reference_location=None):
             return {"case_id": case, "query": query, "answer": "Please include a person, evidence ID, source filename, or text to search for.",
                     "reasoning_summary": "No search term was provided.", "evidence": [], "source_artifacts": [], "assumptions": []}
         fields = (Evidence.evidence_id, Evidence.actor, Evidence.target, Evidence.summary, Evidence.source_file, Evidence.original_id, Evidence.meta)
-        results = records.filter(or_(*(func.lower(field).contains(term.lower(), autoescape=True) for field in fields)))
-        count = results.count()
-        answer = f'{count} records match “{term}”.' if count else f'No records match “{term}”. Try a name, evidence ID, or shorter phrase.'
-        matches = results.limit(20).all()
-        if count > len(matches):
-            answer += f" Showing the first {len(matches)}."
-        reasoning = "Literal search over record IDs, participants, summaries and filenames."
+        exact_results = records.filter(or_(*(func.lower(field).contains(term.lower(), autoescape=True) for field in fields)))
+        exact_matches = exact_results.all()
+        exact_ids = {e.evidence_id for e in exact_matches}
+
+        def _match_exact_content(text, target):
+            if not text:
+                return False
+            for line in text.splitlines():
+                line_str = line.strip().lower()
+                if line_str == target:
+                    return True
+                cleaned = re.sub(r"^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?\s*", "", line_str, flags=re.I).strip()
+                if cleaned == target:
+                    return True
+            return False
+
+        # Keep exact evidence IDs, participant names, filenames, and exact records reliable
+        is_exact_identity = bool(exact_matches) and any(
+            term.lower() == (e.evidence_id or "").lower()
+            or term.lower() == (e.original_id or "").lower()
+            or term.lower() == (e.source_file or "").lower()
+            or (e.source_file and (e.source_file.lower().endswith("/" + term.lower()) or e.source_file.lower().endswith("\\" + term.lower())))
+            or _match_exact_content(e.summary, term.lower())
+            or (e.actor and term.lower() == e.actor.lower())
+            or (e.target and term.lower() == e.target.lower())
+            for e in exact_matches
+        )
+
+        semantic_matches = []
+        if not is_exact_identity:
+            try:
+                from . import embeddings
+                semantic_candidates = embeddings.semantic_search(session, case, term, top_k=20, min_similarity=0.65)
+                if not semantic_candidates and query.strip().casefold() != term.casefold():
+                    semantic_candidates = embeddings.semantic_search(session, case, query.strip(), top_k=20, min_similarity=0.65)
+                semantic_matches = [e for e, score in semantic_candidates if e.evidence_id not in exact_ids]
+            except Exception as exc:
+                logger.warning("Semantic search fallback to literal: %s", exc)
+                semantic_matches = []
+
+        combined_matches = exact_matches + semantic_matches
+        count = len(combined_matches)
+        matches = combined_matches[:20]
+
+        if not count:
+            answer = f'No records match “{term}”. Try a name, evidence ID, or shorter phrase.'
+            reasoning = "Literal and semantic search found no supporting records in this case."
+        elif exact_matches and semantic_matches:
+            answer = f'{count} records match “{term}” ({len(exact_matches)} exact, {len(semantic_matches)} semantic).'
+            if count > len(matches):
+                answer += f" Showing the first {len(matches)}."
+            reasoning = "Hybrid search combining exact matches (record IDs, participants, summaries, filenames) with semantic vector similarity (BAAI/bge-small-en-v1.5). Exact matches are ranked first."
+        elif exact_matches:
+            answer = f'{len(exact_matches)} records match “{term}”.'
+            if len(exact_matches) > len(matches):
+                answer += f" Showing the first {len(matches)}."
+            reasoning = "Literal search over record IDs, participants, summaries and filenames."
+        else:
+            answer = f'{len(semantic_matches)} records semantically match “{term}”.'
+            if len(semantic_matches) > len(matches):
+                answer += f" Showing the first {len(matches)}."
+            reasoning = "Semantic search using local BAAI/bge-small-en-v1.5 embeddings."
     evidence = []
     names = intel.names(session, case) if matches else {}
     term = command.get("terms", "")

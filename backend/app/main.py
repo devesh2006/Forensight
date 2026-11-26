@@ -6,11 +6,12 @@ import hashlib, json, logging, os, re
 import uuid
 
 try:
-    from dotenv import load_dotenv
-    for _p in [Path(__file__).resolve().parents[2] / ".env", Path(__file__).resolve().parents[1] / ".env"]:
-        if _p.exists():
-            load_dotenv(_p)
-    load_dotenv()
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        from dotenv import load_dotenv
+        for _p in [Path(__file__).resolve().parents[2] / ".env", Path(__file__).resolve().parents[1] / ".env"]:
+            if _p.exists():
+                load_dotenv(_p)
+        load_dotenv()
 except Exception:
     pass
 from email.parser import BytesParser
@@ -23,7 +24,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session, sessionmaker
 from . import copilot, intel
-from .ingest import AuditEvent, CaseRecord, Entity, Evidence, ImportJob, ImportedFile, backfill_timestamp_provenance, ingest_dataset, ingest_upload, make_session
+from .ingest import AuditEvent, CaseRecord, Entity, Evidence, EvidenceEmbedding, ImportJob, ImportedFile, backfill_timestamp_provenance, ingest_dataset, ingest_upload, make_session
 
 from .timezones import case_zone
 
@@ -358,6 +359,7 @@ async def upload_dataset(request: Request, case_id: str | None = Query(None), s:
 def reset_data(case_id: str | None = Query(None), s: Session = Depends(db)):
     """Remove uploaded evidence and case records to start fresh."""
     if case_id:
+        s.query(EvidenceEmbedding).filter_by(case_id=case_id).delete()
         s.query(Evidence).filter_by(case_id=case_id).delete()
         s.query(ImportedFile).filter_by(case_id=case_id).delete()
         s.query(Entity).filter_by(case_id=case_id).delete()
@@ -365,6 +367,7 @@ def reset_data(case_id: str | None = Query(None), s: Session = Depends(db)):
         s.query(ImportJob).filter_by(case_id=case_id).delete()
         s.query(CaseRecord).filter_by(case_id=case_id).delete()
     else:
+        s.query(EvidenceEmbedding).delete()
         s.query(Evidence).delete()
         s.query(ImportedFile).delete()
         s.query(Entity).delete()

@@ -289,26 +289,33 @@ def process_import_job(import_id:str):
             current.current_stage=stage;current.files_processed=files_done;current.files_total=files_total
             current.records_processed=records_done;current.records_total=records_total;current.updated_at=datetime.utcnow()
             s.commit()
-        result=ingest_dataset(s,filename,raw,requested_case_id=case,merge_existing=True,progress=progress)
+        result=ingest_dataset(s,filename,raw,requested_case_id=case,merge_existing=True if case else False,progress=progress)
         current=s.query(ImportJob).filter_by(import_id=import_id).first()
+        actual_case=result.get("case_id") or case
+        current.case_id=actual_case
         current.status="complete";current.current_stage="complete";current.files_processed=result["files_processed"]
         current.files_total=result["files_discovered"];current.records_processed=result["records_imported"]
         current.records_total=result["records_detected"];current.manifest_json=json.dumps(result,ensure_ascii=False)
         current.errors_json=json.dumps([*result.get("errors",[]),*result.get("warnings",[])],ensure_ascii=False);current.raw_bytes=None;current.updated_at=datetime.utcnow()
-        audit(s,"import.complete",case,metadata={"import_id":import_id,"records_imported":result["records_imported"]});s.commit()
+        if actual_case:
+            audit(s,"import.complete",actual_case,metadata={"import_id":import_id,"records_imported":result["records_imported"]})
+        s.commit()
     except Exception as exc:
         s.rollback();current=s.query(ImportJob).filter_by(import_id=import_id).first()
         if current:
             current.status="failed";current.current_stage="failed";current.errors_json=json.dumps([{"error":str(exc)}])
-            current.updated_at=datetime.utcnow();audit(s,"import.failed",current.case_id,metadata={"import_id":import_id,"error_type":type(exc).__name__});s.commit()
+            current.raw_bytes=None;current.updated_at=datetime.utcnow()
+            if current.case_id:
+                audit(s,"import.failed",current.case_id,metadata={"import_id":import_id,"error_type":type(exc).__name__})
+            s.commit()
         logger.exception("Evidence import job failed (%s)",import_id)
     finally:s.close()
 
-@app.post("/api/cases/{case_id}/imports",status_code=202)
-async def create_import(case_id:str,background_tasks:BackgroundTasks,request:Request,s:Session=Depends(db)):
-    c=case_record(s,case_id)
-    if not c:raise HTTPException(404,"Case not found")
-    if c.status=="archived":raise HTTPException(409,"Cannot import evidence into an archived case")
+async def queue_import_job(request: Request, background_tasks: BackgroundTasks, case_id: str | None, s: Session):
+    if case_id:
+        c=case_record(s,case_id)
+        if not c:raise HTTPException(404,"Case not found")
+        if c.status=="archived":raise HTTPException(409,"Cannot import evidence into an archived case")
     body=await request.body()
     if len(body)>52*1024*1024:raise HTTPException(413,"Upload exceeds the 50 MB limit")
     try:filename,raw=_multipart_upload(request.headers.get("content-type",""),body)
@@ -317,9 +324,21 @@ async def create_import(case_id:str,background_tasks:BackgroundTasks,request:Req
     import_id=uuid.uuid4().hex;now=datetime.utcnow()
     job=ImportJob(import_id=import_id,case_id=case_id,filename=Path(filename).name,status="queued",current_stage="upload",
                   files_processed=0,files_total=0,records_processed=0,records_total=0,errors_json="[]",created_at=now,updated_at=now,raw_bytes=raw)
-    s.add(job);audit(s,"import.queued",case_id,metadata={"import_id":import_id,"filename":Path(filename).name,"size":len(raw)});s.commit()
+    s.add(job)
+    if case_id:
+        audit(s,"import.queued",case_id,metadata={"import_id":import_id,"filename":Path(filename).name,"size":len(raw)})
+    s.commit()
     background_tasks.add_task(process_import_job,import_id)
     return {"import_id":import_id,"case_id":case_id,"status":"queued"}
+
+@app.post("/api/imports",status_code=202)
+async def create_unscoped_import(background_tasks:BackgroundTasks,request:Request,case_id:str|None=Query(None),s:Session=Depends(db)):
+    effective_case=case_id or request.headers.get("X-Case-ID") or None
+    return await queue_import_job(request,background_tasks,effective_case,s)
+
+@app.post("/api/cases/{case_id}/imports",status_code=202)
+async def create_import(case_id:str,background_tasks:BackgroundTasks,request:Request,s:Session=Depends(db)):
+    return await queue_import_job(request,background_tasks,case_id,s)
 
 @app.get("/api/imports/{import_id}")
 def import_status(import_id:str,s:Session=Depends(db)):
@@ -344,7 +363,10 @@ def upload_report(body: ReportUpload, s: Session = Depends(db)):
     return result
 
 @app.post("/api/datasets/upload")
-async def upload_dataset(request: Request, case_id: str | None = Query(None), s: Session = Depends(db)):
+async def upload_dataset(request: Request, background_tasks: BackgroundTasks, case_id: str | None = Query(None), background: bool = Query(False), s: Session = Depends(db)):
+    if background:
+        effective_case = case_id or request.headers.get("X-Case-ID") or None
+        return await queue_import_job(request, background_tasks, effective_case, s)
     content_type=request.headers.get("content-type",""); body=await request.body()
     if len(body)>52*1024*1024: raise HTTPException(413,"Upload exceeds the 50 MB limit")
     try:

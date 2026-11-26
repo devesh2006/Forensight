@@ -38,17 +38,11 @@ def test_hybrid_search_semantic_and_literal(tmp_path, monkeypatch):
         evidence_count = db.query(Evidence).filter_by(case_id=case_id).count()
         assert evidence_count == 3
 
-        # Verify persistent embeddings were created in database
-        emb_count = db.query(EvidenceEmbedding).filter_by(case_id=case_id).count()
-        assert emb_count == 3
+        # Verify embeddings were NOT created during upload (lazy semantic indexing)
+        emb_count_pre = db.query(EvidenceEmbedding).filter_by(case_id=case_id).count()
+        assert emb_count_pre == 0
 
-        # Verify embeddings have text_fingerprint and 384-dim vector (1536 bytes)
-        emb_row = db.query(EvidenceEmbedding).filter_by(case_id=case_id).first()
-        assert emb_row.text_fingerprint is not None
-        assert len(emb_row.text_fingerprint) == 64  # sha256 hex
-        assert len(emb_row.embedding) == 384 * 4  # 384 float32 = 1536 bytes
-
-        # Test 1: Pure semantic query with no literal keyword match
+        # Test 1: Pure semantic query with no literal keyword match triggers lazy embedding
         # "payment to offshore account" does not appear literally in "Wire transfer of funds sent to offshore account"
         sem_res = client.post(
             f"/api/cases/{case_id}/copilot/query",
@@ -56,6 +50,16 @@ def test_hybrid_search_semantic_and_literal(tmp_path, monkeypatch):
         ).json()
         assert len(sem_res["evidence"]) > 0
         assert "offshore" in sem_res["evidence"][0]["summary"]
+
+        # Verify persistent embeddings were lazily created on search
+        emb_count_post = db.query(EvidenceEmbedding).filter_by(case_id=case_id).count()
+        assert emb_count_post == 3
+
+        # Verify embeddings have text_fingerprint and 384-dim vector (1536 bytes)
+        emb_row = db.query(EvidenceEmbedding).filter_by(case_id=case_id).first()
+        assert emb_row.text_fingerprint is not None
+        assert len(emb_row.text_fingerprint) == 64  # sha256 hex
+        assert len(emb_row.embedding) == 384 * 4  # 384 float32 = 1536 bytes
 
         # Test 2: Another semantic query
         # "meeting behind the warehouse" does not appear literally in "Rendezvous tonight behind the abandoned warehouse at midnight"

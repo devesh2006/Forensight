@@ -53,8 +53,8 @@ registerStatusRetry(async()=>{
 });
 async function submitImport(file,caseId){
   const form=new FormData();form.append("file",file,file.name);
-  if (!caseId) return api("/api/datasets/upload",{method:"POST",body:form});
-  const queued=await api("/api/cases/"+encodeURIComponent(caseId)+"/imports",{method:"POST",body:form});
+  const endpoint=caseId?"/api/cases/"+encodeURIComponent(caseId)+"/imports":"/api/imports";
+  const queued=await api(endpoint,{method:"POST",body:form,timeout:120000});
   for(let attempt=0;attempt<1200;attempt++){
     const job=await api("/api/imports/"+encodeURIComponent(queued.import_id));
     if(job.status==="complete")return job.manifest;

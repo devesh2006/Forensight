@@ -56,7 +56,7 @@ class AuditEvent(Base):
     case_id=Column(String,ForeignKey("cases.case_id"),index=True);evidence_id=Column(String,index=True);actor=Column(String);metadata_json=Column(Text,default="{}")
 class ImportJob(Base):
     __tablename__="import_jobs"
-    import_id=Column(String,primary_key=True);case_id=Column(String,ForeignKey("cases.case_id"),index=True)
+    import_id=Column(String,primary_key=True);case_id=Column(String,ForeignKey("cases.case_id"),index=True,nullable=True)
     filename=Column(String);status=Column(String,index=True);current_stage=Column(String);files_processed=Column(Integer,default=0);files_total=Column(Integer,default=0)
     records_processed=Column(Integer,default=0);records_total=Column(Integer,default=0);errors_json=Column(Text,default="[]");manifest_json=Column(Text)
     created_at=Column(DateTime);updated_at=Column(DateTime);raw_bytes=Column(LargeBinary)
@@ -840,10 +840,5 @@ def ingest_dataset(db, filename: str, raw: bytes, requested_case_id: str | None 
                       metadata_json=json.dumps({"file_count":len(files),"records_detected":detected,"records_imported":imported,
                                                 "records_failed":manifest["records_failed"],"file_hashes":manifest["file_hashes"]},ensure_ascii=False)))
     db.commit()
-    try:
-        from . import embeddings
-        embeddings.sync_case_embeddings(db, candidate)
-    except Exception as exc:
-        logger.warning("Post-ingest embedding sync failed for %s: %s", candidate, exc)
     if progress:progress("complete",files_completed,files_total,imported,imported)
     return manifest

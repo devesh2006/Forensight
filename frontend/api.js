@@ -1,8 +1,9 @@
 const configured = window.FORENSIGHT_CONFIG?.apiUrl || "";
 const base = configured.replace(/\/+$/, "");
 export async function api(path, options = {}) {
+  const timeoutMs = options.timeout ?? 20000;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const isForm = typeof FormData !== "undefined" && options.body instanceof FormData;
     const response = await fetch(base + path, {

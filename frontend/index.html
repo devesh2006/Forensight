@@ -7,8 +7,12 @@
 </head>
 <body>
   <div class="shell">
-    <aside class="rail">
-      <a class="brand" href="#dashboard"><span class="brand-mark">F<span>·</span></span><span>FORENSIGHT<small>FORENSIC INTELLIGENCE</small></span></a>
+    <div id="drawerBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
+    <aside class="rail" id="appRail">
+      <div class="rail-header">
+        <a class="brand" href="#dashboard"><span class="brand-mark">F<span>·</span></span><span>FORENSIGHT<small>FORENSIC INTELLIGENCE</small></span></a>
+        <button id="railCloseBtn" class="rail-close-btn" type="button" aria-label="Close navigation menu">✕</button>
+      </div>
       <div class="case-tag"><span class="live-dot"></span> ACTIVE CASE</div>
       <div class="case-name">ACTIVE CASE<br><b id="railCaseName">Evidence workspace</b><small id="railCaseId">Awaiting upload</small></div>
       <nav aria-label="Investigation views">
@@ -22,7 +26,15 @@
       <div class="rail-bottom"><div class="integrity"><span class="shield">✓</span><div><b>Evidence integrity</b><small>SHA-256 verification available</small></div></div><div class="prototype">Imported evidence</div></div>
     </aside>
     <main class="main">
-      <header class="topbar"><div class="crumb">INVESTIGATIONS <span>/</span> <b>CASE WORKSPACE</b></div><div class="top-actions"><div class="status-wrap"><button id="statusIndicator" class="status status-indicator" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="System status"><span id="statusGlyph">●</span><span id="statusText">CONNECTING...</span></button><section id="statusPopover" class="status-popover hidden" role="dialog" aria-labelledby="statusTitle"><div class="status-popover-head"><b id="statusTitle">System status</b><button id="statusClose" type="button" aria-label="Close status details">×</button></div><dl class="status-details"><div><dt>Backend</dt><dd id="detailBackend">Checking…</dd></div><div><dt>Database</dt><dd id="detailDatabase">Checking…</dd></div><div><dt>Copilot</dt><dd id="detailCopilot">Checking…</dd></div><div><dt>Active case</dt><dd id="detailCase">Checking…</dd></div><div><dt>Evidence</dt><dd id="detailEvidence">Checking…</dd></div><div><dt>Analysis</dt><dd id="detailAnalysis">Waiting</dd></div><div><dt>Mode</dt><dd id="detailMode">Checking…</dd></div><div><dt>Last updated</dt><dd id="detailUpdated">—</dd></div></dl><p id="statusMessage" class="status-message hidden"></p><button id="statusRetry" class="status-retry hidden" type="button">Retry</button></section></div><select id="caseSwitcher" class="case-switcher" aria-label="Switch active case"></select><button id="themeToggle" class="theme-btn" type="button" aria-label="Switch to light theme">☼ <span>Light</span></button><button id="clearDataBtn" class="clear-btn" type="button" title="Remove all uploaded data from memory and reset evidences to 0">🗑 <span>Clear data</span></button><button id="uploadBtn" class="upload-btn" type="button" title="Upload CSV, JSON, XML, XLSX, TXT, HTML, PDF, or ZIP evidence">↑ <span>Upload dataset</span></button><input id="reportFile" type="file" accept=".csv,.tsv,.json,.jsonl,.ndjson,.xml,.xlsx,.txt,.log,.html,.htm,.pdf,.zip,.gpx,.kml,.geojson" hidden><button id="loadBtn" class="load-btn">↻ <span>Connect to case data</span></button></div></header>
+      <header class="topbar">
+        <div class="topbar-main">
+          <button id="menuToggle" class="menu-toggle" type="button" aria-label="Open navigation menu" aria-controls="appRail" aria-expanded="false">
+            <span class="menu-icon">☰</span>
+          </button>
+          <div class="crumb">INVESTIGATIONS <span>/</span> <b>CASE WORKSPACE</b></div>
+        </div>
+        <div class="top-actions"><div class="status-wrap"><button id="statusIndicator" class="status status-indicator" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="System status"><span id="statusGlyph">●</span><span id="statusText">CONNECTING...</span></button><section id="statusPopover" class="status-popover hidden" role="dialog" aria-labelledby="statusTitle"><div class="status-popover-head"><b id="statusTitle">System status</b><button id="statusClose" type="button" aria-label="Close status details">×</button></div><dl class="status-details"><div><dt>Backend</dt><dd id="detailBackend">Checking…</dd></div><div><dt>Database</dt><dd id="detailDatabase">Checking…</dd></div><div><dt>Copilot</dt><dd id="detailCopilot">Checking…</dd></div><div><dt>Active case</dt><dd id="detailCase">Checking…</dd></div><div><dt>Evidence</dt><dd id="detailEvidence">Checking…</dd></div><div><dt>Analysis</dt><dd id="detailAnalysis">Waiting</dd></div><div><dt>Mode</dt><dd id="detailMode">Checking…</dd></div><div><dt>Last updated</dt><dd id="detailUpdated">—</dd></div></dl><p id="statusMessage" class="status-message hidden"></p><button id="statusRetry" class="status-retry hidden" type="button">Retry</button></section></div><select id="caseSwitcher" class="case-switcher" aria-label="Switch active case"></select><button id="themeToggle" class="theme-btn" type="button" aria-label="Switch to light theme">☼ <span>Light</span></button><button id="clearDataBtn" class="clear-btn" type="button" title="Remove all uploaded data from memory and reset evidences to 0">🗑 <span>Clear data</span></button><button id="uploadBtn" class="upload-btn" type="button" title="Upload CSV, JSON, XML, XLSX, TXT, HTML, PDF, or ZIP evidence">↑ <span>Upload dataset</span></button><input id="reportFile" type="file" accept=".csv,.tsv,.json,.jsonl,.ndjson,.xml,.xlsx,.txt,.log,.html,.htm,.pdf,.zip,.gpx,.kml,.geojson" hidden><button id="loadBtn" class="load-btn">↻ <span>Connect to case data</span></button></div>
+      </header>
       <div id="notice" class="notice hidden"></div>
       <section id="importResult" class="panel import-result hidden" aria-live="polite"></section>
       <section id="dashboard" class="page active">

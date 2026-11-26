@@ -108,6 +108,26 @@ async function refreshCaseSwitcher(selectCase){
     if(selectCase||result.active_case)selector.value=selectCase||result.active_case;
   }catch(error){console.warn("Could not load cases",error)}
 }
+function openDrawer() {
+  $("#appRail")?.classList.add("open");
+  $("#drawerBackdrop")?.classList.add("active");
+  $("#menuToggle")?.setAttribute("aria-expanded", "true");
+  document.body.classList.add("drawer-open");
+}
+function closeDrawer() {
+  $("#appRail")?.classList.remove("open");
+  $("#drawerBackdrop")?.classList.remove("active");
+  $("#menuToggle")?.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("drawer-open");
+}
+$("#menuToggle")?.addEventListener("click", () => {
+  if ($("#appRail")?.classList.contains("open")) closeDrawer();
+  else openDrawer();
+});
+$("#railCloseBtn")?.addEventListener("click", closeDrawer);
+$("#drawerBackdrop")?.addEventListener("click", closeDrawer);
+window.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
 function go(page) {
   $$(".page").forEach(x=>x.classList.toggle("active",x.id===page));
   $$(".nav-item").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
@@ -117,6 +137,7 @@ function go(page) {
   if(page==="graph") loadGraph();
   if(page==="map") loadMap();
   window.scrollTo(0,0);
+  closeDrawer();
 }
 $$(".nav-item").forEach(b=>b.onclick=()=>go(b.dataset.page));
 $$("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
